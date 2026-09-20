@@ -1,0 +1,183 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum CategoryType {
+  INCOME
+  EXPENSE
+  @@map("category_type")
+}
+
+enum DebtDirection {
+  OWED_TO_ME
+  I_OWE
+  @@map("debt_direction")
+}
+
+enum DebtStatus {
+  OPEN
+  PAID
+  @@map("debt_status")
+}
+
+enum GoalStatus {
+  IN_PROGRESS
+  ACHIEVED
+  CANCELLED
+  @@map("goal_status")
+}
+
+model User {
+  id              String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  email           String   @unique @db.VarChar(255)
+  passwordHash    String   @map("password_hash") @db.Text
+  displayName     String?  @map("display_name") @db.VarChar(100)
+  currency        String   @default("PEN") @db.Char(3)
+  initialBalance  Decimal  @default(0) @map("initial_balance") @db.Decimal(14,2)
+  onboardingDone  Boolean  @default(false) @map("onboarding_done")
+  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt       DateTime @default(now()) @map("updated_at") @db.Timestamptz
+
+  categories        Category[]
+  transactions      Transaction[]
+  debts             Debt[]
+  savingsGoals      SavingsGoal[]
+  refreshTokens     RefreshToken[]
+
+  @@map("users")
+}
+
+model RefreshToken {
+  id          String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId      String    @map("user_id") @db.Uuid
+  tokenHash   String    @unique @map("token_hash") @db.Char(64)
+  expiresAt   DateTime  @map("expires_at") @db.Timestamptz
+  revokedAt   DateTime? @map("revoked_at") @db.Timestamptz
+  replacedBy  String?   @map("replaced_by") @db.Uuid
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz
+
+  user                 User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  replacedByToken      RefreshToken? @relation("Replacement", fields: [replacedBy], references: [id], onDelete: SetNull)
+  replacements         RefreshToken[] @relation("Replacement")
+
+  @@index([userId])
+  @@map("refresh_tokens")
+}
+
+model Category {
+  id          String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId      String       @map("user_id") @db.Uuid
+  name        String       @db.VarChar(60)
+  type        CategoryType
+  systemKey   String?      @map("system_key") @db.VarChar(30)
+  icon        String?      @db.VarChar(40)
+  color       String?      @db.Char(7)
+  isSystem    Boolean      @default(false) @map("is_system")
+  createdAt   DateTime     @default(now()) @map("created_at") @db.Timestamptz
+
+  user        User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  transactions Transaction[]
+
+  @@unique([userId, name, type])
+  @@unique([userId, systemKey])
+  @@map("categories")
+}
+
+model Debt {
+  id           String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId       String        @map("user_id") @db.Uuid
+  direction    DebtDirection
+  counterparty String        @db.VarChar(100)
+  principal    Decimal       @db.Decimal(14,2)
+  dueDate      DateTime?     @map("due_date") @db.Date
+  status       DebtStatus    @default(OPEN)
+  note         String?       @db.VarChar(255)
+  createdAt    DateTime      @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt    DateTime      @default(now()) @map("updated_at") @db.Timestamptz
+
+  user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  payments     DebtPayment[]
+  transactions Transaction[]
+
+  @@index([userId, direction, status, dueDate])
+  @@map("debts")
+}
+
+model DebtPayment {
+  id         String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  debtId     String   @map("debt_id") @db.Uuid
+  amount     Decimal  @db.Decimal(14,2)
+  paidAt     DateTime @map("paid_at") @db.Date
+  note       String?  @db.VarChar(255)
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  debt        Debt         @relation(fields: [debtId], references: [id], onDelete: Cascade)
+  transaction Transaction?
+
+  @@index([debtId, paidAt])
+  @@map("debt_payments")
+}
+
+model SavingsGoal {
+  id           String      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId       String      @map("user_id") @db.Uuid
+  name         String      @db.VarChar(100)
+  targetAmount Decimal     @map("target_amount") @db.Decimal(14,2)
+  deadline     DateTime?   @db.Date
+  status       GoalStatus  @default(IN_PROGRESS)
+  createdAt    DateTime    @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt    DateTime    @default(now()) @map("updated_at") @db.Timestamptz
+
+  user         User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  contributions GoalContribution[]
+
+  @@index([userId, status])
+  @@map("savings_goals")
+}
+
+model GoalContribution {
+  id         String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  goalId     String   @map("goal_id") @db.Uuid
+  amount     Decimal  @db.Decimal(14,2)
+  madeAt     DateTime @map("made_at") @db.Date
+  note       String?  @db.VarChar(255)
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  goal        SavingsGoal  @relation(fields: [goalId], references: [id], onDelete: Cascade)
+  transaction Transaction?
+
+  @@index([goalId, madeAt])
+  @@map("goal_contributions")
+}
+
+model Transaction {
+  id                 String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId             String   @map("user_id") @db.Uuid
+  categoryId         String   @map("category_id") @db.Uuid
+  type               CategoryType
+  amount             Decimal  @db.Decimal(14,2)
+  description        String?  @db.VarChar(255)
+  occurredAt         DateTime @map("occurred_at") @db.Date
+  debtId             String?  @map("debt_id") @db.Uuid
+  debtPaymentId      String?  @unique @map("debt_payment_id") @db.Uuid
+  goalContributionId String?  @unique @map("goal_contribution_id") @db.Uuid
+  createdAt          DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt          DateTime @default(now()) @map("updated_at") @db.Timestamptz
+
+  user             User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  category         Category          @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  debt             Debt?             @relation(fields: [debtId], references: [id], onDelete: SetNull)
+  debtPayment      DebtPayment?      @relation(fields: [debtPaymentId], references: [id], onDelete: Cascade)
+  goalContribution GoalContribution? @relation(fields: [goalContributionId], references: [id], onDelete: Cascade)
+
+  @@index([userId, occurredAt, createdAt])
+  @@index([userId, type, occurredAt])
+  @@index([userId, categoryId, occurredAt])
+  @@index([debtId])
+  @@map("transactions")
+}
