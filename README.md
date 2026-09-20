@@ -1,0 +1,3 @@
+﻿# chanchito
+
+Gestor Económico Personal
