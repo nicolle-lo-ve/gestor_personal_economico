@@ -197,7 +197,7 @@ Cada evento muestra un `toast.info` traducido al idioma activo (es/en/pt).
 
 ### 4.1 Toast en tres idiomas
 
- ![Toast en tres idiomas](gestor_personal_economico/docs/screenshots/Panel financiero multilingüe con notificaciones.png)  
+![Toast en tres idiomas](screenshots/Panel financiero multilingüe con notificaciones.png)  
 ---
 
 ## 5. Manejo de errores y reconexión
